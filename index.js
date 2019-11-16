@@ -2,6 +2,7 @@ var app = require('express')();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var mongodb = require('mongodb');
+var ObjectId = require('mongodb').ObjectID;
 
 var MongoClient = mongodb.MongoClient;
 var url = 'mongodb://localhost:27017/HAIRSALONBOOKING';
@@ -19,6 +20,7 @@ MongoClient.connect(url, function (err, db) {
     booktimeCollection = db.collection('Booktime');
     shoppingCollection = db.collection('Shopping');
     notificationCollection = db.collection('Notification');
+    tokenCollection = db.collection('Tokens');
   }
 });
 http.listen(3000, function () {
@@ -123,60 +125,79 @@ io.on('connection', function (socket) {
   });
 
   socket.on('getTimeBooking', function (id, time) {
-    const cursor = booktimeCollection.find({$and:[{ barberId: id}, {date: time }]});
+    const cursor = booktimeCollection.find({ $and: [{ barberId: id }, { date: time }] });
     cursor.each(function (err, data) {
       if (cursor.hasNext()) {
         console.log(data);
         socket.emit('getTimeBooking', data);
       } else {
-         console.log(err);
+        console.log(err);
       }
     });
   });
 
 
-  socket.on('addBooking', (barberId,barberName,customerName,customerPhone,salonId,salonAddress, salonName,slot,date,notification)=> {
+  socket.on('addBooking', (barberId, barberName, customerName, customerPhone, salonId, salonAddress, salonName, slot, done, date, notification) => {
     let bookingInfo = {
       barberId: barberId,
       barberName: barberName,
       customerName: customerName,
-      customerPhone:customerPhone,
-      salonId:salonId,
-      salonAddress:salonAddress, 
-      salonName:salonName,
-      slot:slot,
-      date:date}
-     let myNotification = JSON.parse(notification);
-      notificationCollection.insert(myNotification,function(err,result){
-        if(err){
-          console.log(err);
-        }else{
-          console.log(result);
-        }
-      })
-      booktimeCollection.insert(bookingInfo, function(err,result){
-        if(err){
-          console.log(err);
-          throw err;
-        }else{
-          const cursor = notificationCollection.find({$and:[{ idBarber: barberId}, {read: false }]});
-          cursor.each(function (err, data) {
-            io.emit('getUnreadNotification',data)
-            console.log(data);
+      customerPhone: customerPhone,
+      salonId: salonId,
+      salonAddress: salonAddress,
+      salonName: salonName,
+      slot: slot,
+      done: done,
+      date: date
+    }
+        booktimeCollection.insert(bookingInfo, function (err, result) {
+          if (err) {
+            console.log(err);
+            throw err;
+          } else {
+            socket.emit('addBooking', result);
+            console.log('addbooking'+result)
+            let myNotification = JSON.parse(notification);
+            notificationCollection.insert(myNotification, function (err, resultnotification) {
+              if (err) {
+                console.log(err);
+              } else {
+                console.log(resultnotification);
+              }
+            })
+            notificationCollection.find({ $and: [{ idBarber: barberId }, { read: false }] }).count(function(err,count){
+              if(err){
+                console.log(err)
+              }else{
+                io.emit('countNotification',count)
+                console.log(count)
+              }
+            });
+                    }
         });
-          socket.emit('addBooking',result);
-          console.log(result);
-        }
-      });
-  });
-  socket.on('getUnreadNotification',(idBarber)=>{
-    const cursor = notificationCollection.find({$and:[{ idBarber: idBarber}, {read: false }]});
-    cursor.each(function (err, data) {
-        console.log(data);
-        socket.emit('getUnreadNotification', data);
-
-    });
+      
     
+  });
+  socket.on('countNotification', (idBarber) => {
+    notificationCollection.find({ $and: [{ idBarber: idBarber }, { read: false }] }).count(function(err,count){
+      if(err){
+        console.log(err)
+      }else{
+        socket.emit('countNotification',count)
+        console.log(count)
+      }   
+    });
+  })
+
+  socket.on('getNotification',(idBarber)=>{
+    notificationCollection.find({ $and: [{ idBarber: idBarber }, { read: false }] }).each(function(err,data){
+      if(err){
+        throw err;
+        console.log(err)
+        }else{
+          socket.emit('getNotification',data)
+        }
+    });
   })
 
   socket.on('checkemail', function (email) {
@@ -191,99 +212,47 @@ io.on('connection', function (socket) {
       }
     });
   });
-  socket.on('getItemShopping', function(type){
-    const cursor = shoppingCollection.find({type:type});
-    cursor.each(function(err,data){
+  socket.on('getItemShopping', function (type) {
+    const cursor = shoppingCollection.find({ type: type });
+    cursor.each(function (err, data) {
       console.log(data)
-      socket.emit('getItemShopping',data);
+      socket.emit('getItemShopping', data);
     });
   });
 
-  socket.on('staffLogin', function(idBranch, userName,password){
-   barberCollection.findOne({$and:[{idBranch:idBranch},{username:userName}, {password: password}]},function(err,isMatch){
-     if(err){
-       
-     }else{
-      console.log(isMatch);
-      socket.emit('staffLogin',isMatch);
-     }
-   });
+  socket.on('staffLogin', function (idBranch, userName, password) {
+    barberCollection.findOne({ $and: [{ idBranch: idBranch }, { username: userName }, { password: password }] }, function (err, isMatch) {
+      if (err) {
 
-    
+      } else {
+        console.log('staffLogin' + isMatch);
+        socket.emit('staffLogin', isMatch);
+      }
+    });
   });
-
-
-//   shoppingCollection.insertMany([
-//     //Wax
-// {type:'WAX',
-//   name : 'Wax Colonna Hair Mud',
-// image : 'https://product.hstatic.net/1000306701/product/sap-colona-30shine1_master.jpg',
-// price : 25},
-
-// {type:'WAX',
-//   name : 'Wax Colonna Hair Mud',
-// image : 'https://product.hstatic.net/1000306701/product/sap-colona-30shine1_master.jpg',
-// price : 25},
-
-// {type:'WAX',
-//   name : 'Wax By Vilain Dynamite Clay',
-// image : 'https://product.hstatic.net/1000306701/product/42_master.jpg',
-// price : 25},
-
-// {type:'WAX',
-//   name : 'Wax By Vilain Gold Digger',
-// image : 'https://product.hstatic.net/1000306701/product/goldigger_master.jpg',
-// price : 25},
-// {type:'WAX',
-//   name : 'Wax Glanzen Clay',
-// image : 'https://product.hstatic.net/1000306701/product/glazen_tag_master.jpg',
-// price : 25},
-
-// {type:'WAX',
-//   name : 'Wax Kevin Murphy - Rough Rider',
-// image : 'https://product.hstatic.net/1000306701/product/5_95461894759842e3839bf71fa8b3be7b_master.jpg',
-// price : 30},
-
-// {type:'WAX',
-//   name : 'Wax Morris Motley',
-// image : 'https://product.hstatic.net/1000306701/product/6_8c53296c9e584436bb61f079515d3930_master.jpg',
-// price : 40},
-
-// {type:'WAX',
-//   name : 'Wax Morris Motley Balm',
-// image : 'https://product.hstatic.net/1000306701/product/1_9c57f1e58cda4d94b6681df8f67cfdea_master.jpg',
-// price : 40},
-
-// //Spray
-// {type:'SPRAY',
-//   name : 'BRITISH M Hard Tailor Spray ',
-// image : 'https://product.hstatic.net/1000306701/product/g_m00_master.jpg',
-// price : 30},
-
-// {type:'SPRAY',
-//   name : 'Colonna Spray',
-// image : 'https://product.hstatic.net/1000306701/product/p1411484_master.jpg',
-// price : 20
-// },
-// {type:'SPRAY',
-//   name : 'Spray Lady Killer',
-// image : 'https://product.hstatic.net/1000306701/product/9_master.jpg',
-// price : 30},
-
-// {type:'SPRAY',
-//   name : 'Spray R&B',
-// price : 'https://product.hstatic.net/1000306701/product/10_87d53831c1594e1584ca0f1fd791d46d_master.jpg',
-// price : 10},
-
-// {type:'SPRAY',
-//   name : 'Spray TIGI RK Groupie Hard Hold',
-// image : 'https://product.hstatic.net/1000306701/product/groupie_master.jpg',
-// price : 15},
-
-// {type:'SPRAY',
-//   name : 'Spray TIGI BED HEAD HARD HEAD',
-// image : 'https://product.hstatic.net/1000306701/product/bed_head_c0e8619915fa4ddea2f44bc550fec7f4_master.jpg',
-// price : 25},
-//   ]);
-
+  socket.on('updateToken', token=>{
+    let jsontoken = JSON.parse(token);
+    console.log(jsontoken.idbarber);
+    tokenCollection.update({idbarber:jsontoken.idbarber},{idbarber:jsontoken.idbarber, token:jsontoken.token}, {upsert :true})
+  });
+  socket.on('getToken',function(idbarber){
+    tokenCollection.findOne({ idbarber: idbarber },function(err,data){
+      if(err){
+        throw err;
+      }
+      socket.emit('getToken',data);
+      console.log('gettoken'+ data)
+    });
+  });
+socket.on('getBookInfomation', idBookTime=>{
+  console.log(idBookTime)
+  booktimeCollection.findOne({_id:ObjectId(idBookTime)},function(err,data){
+    if(err){
+      throw err;
+    }else{
+      socket.emit('getBookInfomation',data);
+      console.log('GET BOOKING INFOMATION'+ data)
+    }
+  })
+})
 });
