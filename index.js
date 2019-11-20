@@ -21,6 +21,7 @@ MongoClient.connect(url, function (err, db) {
     shoppingCollection = db.collection('Shopping');
     notificationCollection = db.collection('Notification');
     tokenCollection = db.collection('Tokens');
+    serviceCollection = db.collection('Services');
   }
 });
 http.listen(3000, function () {
@@ -150,53 +151,53 @@ io.on('connection', function (socket) {
       done: done,
       date: date
     }
-        booktimeCollection.insert(bookingInfo, function (err, result) {
+    booktimeCollection.insert(bookingInfo, function (err, result) {
+      if (err) {
+        console.log(err);
+        throw err;
+      } else {
+        socket.emit('addBooking', result);
+        console.log('addbooking' + result)
+        let myNotification = JSON.parse(notification);
+        notificationCollection.insert(myNotification, function (err, resultnotification) {
           if (err) {
             console.log(err);
-            throw err;
           } else {
-            socket.emit('addBooking', result);
-            console.log('addbooking'+result)
-            let myNotification = JSON.parse(notification);
-            notificationCollection.insert(myNotification, function (err, resultnotification) {
-              if (err) {
-                console.log(err);
-              } else {
-                console.log(resultnotification);
-              }
-            })
-            notificationCollection.find({ $and: [{ idBarber: barberId }, { read: false }] }).count(function(err,count){
-              if(err){
-                console.log(err)
-              }else{
-                io.emit('countNotification',count)
-                console.log(count)
-              }
-            });
-                    }
+            console.log(resultnotification);
+          }
+        })
+        notificationCollection.find({ $and: [{ idBarber: barberId }, { read: false }] }).count(function (err, count) {
+          if (err) {
+            console.log(err)
+          } else {
+            io.emit('countNotification', count)
+            console.log(count)
+          }
         });
-      
-    
+      }
+    });
+
+
   });
   socket.on('countNotification', (idBarber) => {
-    notificationCollection.find({ $and: [{ idBarber: idBarber }, { read: false }] }).count(function(err,count){
-      if(err){
+    notificationCollection.find({ $and: [{ idBarber: idBarber }, { read: false }] }).count(function (err, count) {
+      if (err) {
         console.log(err)
-      }else{
-        socket.emit('countNotification',count)
+      } else {
+        socket.emit('countNotification', count)
         console.log(count)
-      }   
+      }
     });
   })
 
-  socket.on('getNotification',(idBarber)=>{
-    notificationCollection.find({ $and: [{ idBarber: idBarber }, { read: false }] }).each(function(err,data){
-      if(err){
+  socket.on('getNotification', (idBarber) => {
+    notificationCollection.find({ $and: [{ idBarber: idBarber }, { read: false }] }).each(function (err, data) {
+      if (err) {
         throw err;
         console.log(err)
-        }else{
-          socket.emit('getNotification',data)
-        }
+      } else {
+        socket.emit('getNotification', data)
+      }
     });
   })
 
@@ -230,29 +231,48 @@ io.on('connection', function (socket) {
       }
     });
   });
-  socket.on('updateToken', token=>{
+  socket.on('updateToken', token => {
     let jsontoken = JSON.parse(token);
     console.log(jsontoken.idbarber);
-    tokenCollection.update({idbarber:jsontoken.idbarber},{idbarber:jsontoken.idbarber, token:jsontoken.token}, {upsert :true})
+    tokenCollection.update({ idbarber: jsontoken.idbarber }, { idbarber: jsontoken.idbarber, token: jsontoken.token }, { upsert: true })
   });
-  socket.on('getToken',function(idbarber){
-    tokenCollection.findOne({ idbarber: idbarber },function(err,data){
-      if(err){
+  socket.on('getToken', function (idbarber) {
+    tokenCollection.findOne({ idbarber: idbarber }, function (err, data) {
+      if (err) {
         throw err;
       }
-      socket.emit('getToken',data);
-      console.log('gettoken'+ data)
+      socket.emit('getToken', data);
+      console.log('gettoken' + data)
     });
   });
-socket.on('getBookInfomation', idBookTime=>{
-  console.log(idBookTime)
-  booktimeCollection.findOne({_id:ObjectId(idBookTime)},function(err,data){
-    if(err){
-      throw err;
-    }else{
-      socket.emit('getBookInfomation',data);
-      console.log('GET BOOKING INFOMATION'+ data)
+  socket.on('getBookInfomation', idBookTime => {
+    if (idBookTime == null) {
+      let cursor= booktimeCollection.find({}).sort({_id:-1}).limit(1);
+      cursor.each(function (err, data) {
+        socket.emit('getBookInfomation', data);
+    
+      });
+      
+    } else {
+      booktimeCollection.findOne({ _id: ObjectId(idBookTime) }, function (err, data) {
+        if (err) {
+          throw err;
+        } else {
+          socket.emit('getBookInfomation', data);
+          console.log('GET BOOKING INFOMATION' + data)
+        }
+      })
     }
+  });
+  socket.on('getServices', function () {
+    serviceCollection.find({}).each(function (err, data) {
+      if (err) {
+        throw err;
+      } else {
+        socket.emit('getServices', data);
+        console.log(data)
+      }
+    });
   })
-})
+
 });
