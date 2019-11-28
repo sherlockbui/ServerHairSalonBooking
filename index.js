@@ -22,6 +22,7 @@ MongoClient.connect(url, function (err, db) {
     notificationCollection = db.collection('Notification');
     tokenCollection = db.collection('Tokens');
     serviceCollection = db.collection('Services');
+    ratingCollection = db.collection('Rating');
   }
 });
 http.listen(3000, function () {
@@ -46,27 +47,17 @@ io.on('connection', function (socket) {
     });
   });
   socket.on('register', function (email, name, phone, adress) {
-
-    console.log('có người đăng ký tài khoản');
-    collection.findOne({ email: email }, function (err, result) {
-      if (result != null) {
-        socket.emit('register', 'Exits');
-        console.log('Tồn Tại');
+    let user = { email: email, name: name, phone: phone, adress: adress };
+    collection.insert(user, function (err, result) {
+      console.log(result);
+      if (err) {
+        throw err;
       } else {
-        let user = { email: email, name: name, phone: phone, adress: adress };
-        collection.insert(user, function (err, result) {
-          console.log(result);
-          if (err) {
-            socket.emit('register', 'Err');
-            throw err;
-          } else {
-            socket.emit('register', 'Success');
-            console.log('insert success!')
-
-          }
-        });
+        socket.emit('register', result);
+        console.log('insert success!')
       }
     });
+
   });
 
   socket.on('getBanners', function () {
@@ -126,19 +117,18 @@ io.on('connection', function (socket) {
   });
 
   socket.on('getTimeBooking', function (id, time) {
-    const cursor = booktimeCollection.find({ $and: [{ barberId: id }, { date: time }] });
-    cursor.each(function (err, data) {
-      if (cursor.hasNext()) {
-        console.log(data);
-        socket.emit('getTimeBooking', data);
-      } else {
-        console.log(err);
-      }
+    const cursor = booktimeCollection.find({ $and: [{ barberId: id }, { date: time }] }).sort({ slot: 1 });
+    cursor.forEach(function (data) {
+
+      console.log(data);
+      io.emit('getTimeBooking', data);
+
     });
   });
 
 
-  socket.on('addBooking', (barberId, barberName, customerName, customerPhone, salonId, salonAddress, salonName, slot, done, date, notification) => {
+  socket.on('addBooking', (barberId, barberName, customerName, customerPhone, salonId, salonAddress, salonName, slot, done, date, notification, cartItemList) => {
+    let cartItemListJson = JSON.parse(cartItemList);
     let bookingInfo = {
       barberId: barberId,
       barberName: barberName,
@@ -149,7 +139,8 @@ io.on('connection', function (socket) {
       salonName: salonName,
       slot: slot,
       done: done,
-      date: date
+      date: date,
+      cartItemListJson
     }
     booktimeCollection.insert(bookingInfo, function (err, result) {
       if (err) {
@@ -201,12 +192,14 @@ io.on('connection', function (socket) {
     });
   })
 
-  socket.on('checkemail', function (email) {
-    console.log(email);
-    collection.findOne({ email: email }, function (err, result) {
+  socket.on('checkemail', function (email,phone) {
+    console.log(email, phone);
+    collection.findOne({$or:[{email: email },{phone:phone}]} , function (err, result) {
       if (result != null) {
         console.log(result);
         socket.emit('checkemail', result);
+      
+        
       } else {
         socket.emit('checkemail', result);
         console.log('show dialog client for update infomation');
@@ -233,11 +226,18 @@ io.on('connection', function (socket) {
   });
   socket.on('updateToken', token => {
     let jsontoken = JSON.parse(token);
-    console.log(jsontoken.idbarber);
-    tokenCollection.update({ idbarber: jsontoken.idbarber }, { idbarber: jsontoken.idbarber, token: jsontoken.token }, { upsert: true })
+    console.log(jsontoken);
+    if (jsontoken.idbarber != null) {
+      console.log(jsontoken.idbarber);
+      tokenCollection.update({ idbarber: jsontoken.idbarber }, { idbarber: jsontoken.idbarber, token: jsontoken.token }, { upsert: true })
+    }
+    else if (jsontoken.phoneCustomer != null) {
+      console.log(jsontoken.phoneCustomer);
+      tokenCollection.update({ customerPhone: jsontoken.phoneCustomer }, { customerPhone: jsontoken.phoneCustomer, token: jsontoken.token }, { upsert: true })
+    }
   });
-  socket.on('getToken', function (idbarber) {
-    tokenCollection.findOne({ idbarber: idbarber }, function (err, data) {
+  socket.on('getToken', function (keytoken) {
+    tokenCollection.findOne({ $or: [{ idbarber: keytoken }, { customerPhone: keytoken }] }, function (err, data) {
       if (err) {
         throw err;
       }
@@ -245,14 +245,14 @@ io.on('connection', function (socket) {
       console.log('gettoken' + data)
     });
   });
-  socket.on('getBookInfomation', idBookTime => {
+  socket.on('getBookInfomation', (idBookTime, customerPhone) => {
     if (idBookTime == null) {
-      let cursor= booktimeCollection.find({}).sort({_id:-1}).limit(1);
-      cursor.each(function (err, data) {
+      let cursor = booktimeCollection.find({ $and:[{done: false},{customerPhone:customerPhone}] }).sort({ _id: -1 }).limit(1);
+      cursor.forEach(function (data) {
         socket.emit('getBookInfomation', data);
-    
+        console.log('GET BOOKING INFOMATION' + data)
+
       });
-      
     } else {
       booktimeCollection.findOne({ _id: ObjectId(idBookTime) }, function (err, data) {
         if (err) {
@@ -264,6 +264,12 @@ io.on('connection', function (socket) {
       })
     }
   });
+  socket.on('getBookingHistory',customerPhone =>{
+    booktimeCollection.find({ $and:[{done: true},{customerPhone:customerPhone}] }).sort({_id:-1}).forEach(data=>{
+      console.log('getBookingHistory ',data)
+      socket.emit('getBookingHistory',data)
+    })
+  })
   socket.on('getServices', function () {
     serviceCollection.find({}).each(function (err, data) {
       if (err) {
@@ -273,6 +279,50 @@ io.on('connection', function (socket) {
         console.log(data)
       }
     });
+  })
+  socket.on('doneService', (idBookTime) => {
+    booktimeCollection.update({ _id: ObjectId(idBookTime) }, { $set: { done: true } }, function (err, data) {
+      if (err) throw err
+      else {
+        let cursor = booktimeCollection.find({ slot: false }).sort({ _id: -1 }).limit(1);
+        cursor.each(function (err, data) {
+          if (err) throw err;
+          else {
+            io.emit('getBookInfomation', data);
+            console.log('getBookInfomation' + data)
+          }
+        });
+        socket.emit('doneService', data.result);
+        console.log(data.result)
+      }
+    });
+  })
+  socket.on('Rating',(numberRating,commend, idBarber)=>{
+    if(numberRating!=null && commend!=null){
+      ratingCollection.insert({rate:numberRating,commend:commend, idBarber:idBarber},function(err,result){
+        if(result){
+          ratingCollection.aggregate([{$match:{idBarber:idBarber}},{$group:{_id:{},sum: {$sum: "$rate"}}}]).each(function(err,data){
+            if(data!=null){
+              ratingCollection.find({idBarber:idBarber}).count(function(err,number){
+                if(err){
+                  throw err
+                }else{
+                  let ratingpercent = parseFloat((data.sum/number).toFixed(1)); 
+                  barberCollection.update({_id:ObjectId(idBarber)},{$set:{rating:ratingpercent}},{upsert:true},function(err,data){
+                    if(err){
+                      throw err;
+                    }else{
+                      console.log(data);
+                    }
+                  })
+                }
+              })
+            }
+          })
+        }
+      });
+
+    }
   })
 
 });
