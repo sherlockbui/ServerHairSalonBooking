@@ -188,6 +188,13 @@ io.on('connection', function (socket) {
         console.log(err)
       } else {
         socket.emit('getNotification', data)
+        notificationCollection.updateMany({idBarber: idBarber }, { $set: { read: true }}, function(err, data){
+          if(err){
+            throw err;
+          }else{
+            console.log("update notification", data)
+          }
+        })
       }
     });
   })
