@@ -53,7 +53,7 @@ io.on('connection', function (socket) {
       if (err) {
         throw err;
       } else {
-        socket.emit('register', result);
+        socket.emit('register', user);
         console.log('insert success!')
       }
     });
