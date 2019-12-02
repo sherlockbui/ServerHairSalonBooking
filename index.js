@@ -23,6 +23,7 @@ MongoClient.connect(url, function (err, db) {
     tokenCollection = db.collection('Tokens');
     serviceCollection = db.collection('Services');
     ratingCollection = db.collection('Rating');
+    adminCollection = db.collection('Admin');
   }
 });
 http.listen(3000, function () {
@@ -331,5 +332,40 @@ io.on('connection', function (socket) {
 
     }
   })
+  socket.on('adminLogin', function(userName, password){
+      adminCollection.findOne({$and:[{userName:userName},{password:password}]},function(err,data){
+        console.log('admin login', data)
+        socket.emit('adminLogin',data)
+      })
+    })
 
+    //Admin
+  socket.on('addState', nameState=>{
+    salonCollection.insert({name:nameState},function(err,result){
+      if(err){
+        throw err;
+      }else{
+        console.log('add state', result.ops[0])
+        socket.emit('addState', result.ops[0])
+      }
+    })
+  })
+  socket.on('deleteState', nameState=>{
+    salonCollection.remove({name:nameState},function(err, data){
+      if(data!=null){
+        console.log('delete state', data)
+        socket.emit('deleteState', data);
+      }
+    })
+  })
+  socket.on('updateState',(preState, nameState)=>{
+    salonCollection.update({name:preState},{$set:{name:nameState}},function(err,data){
+      if(err){
+        throw err;
+      }else{
+        console.log('updateState', data)
+        socket.emit('updateState', data)
+      }
+    })
+  })
 });
