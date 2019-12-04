@@ -501,7 +501,7 @@ io.on("connection", function(socket) {
     );
   });
   socket.on("addBarber", (name, username, password, idsalon) => {
-    barberCollection.findOne({ username: username }, function(err, isMatch){
+    barberCollection.findOne({ username: username }, function(err, isMatch) {
       if (isMatch != null) {
         socket.emit("addBarber", "exits");
       } else if (err) {
@@ -529,14 +529,14 @@ io.on("connection", function(socket) {
   });
   socket.on("updateBarber", (id_barber, name, username, password) => {
     barberCollection.update(
-      { _id:ObjectId(id_barber)},
+      { _id: ObjectId(id_barber) },
       { $set: { name: name, username: username, password: password } },
       function(err, data) {
         if (err) {
           throw err;
         } else {
           barberCollection.findOne(
-            { _id:ObjectId(id_barber)},
+            { _id: ObjectId(id_barber) },
             (err, result) => {
               if (err) {
                 throw err;
@@ -550,96 +550,117 @@ io.on("connection", function(socket) {
       }
     );
   });
-  socket.on('deleteBarber', id_barber=>{
-    barberCollection.remove({_id:ObjectId(id_barber)},function(err,data){
-      if(err){
-        throw err
-      }else{
-        console.log('Xoa nhan vien ',data)
-        socket.emit('deleteBarber', data)
-      }
-    })
-  })
-  socket.on('addProduct', (selectedChip, name, price, url_image)=>{
-    shoppingCollection.insert({type:selectedChip,name:name,image:url_image,price:price},function(err,data){
-      if(err){
-        throw err
-      }else{
-        console.log(data)
-        socket.emit('addProduct', data.ops[0])
-      }
-    })
-  })
-  socket.on('updateProduct',(id_product, name, price)=>{
-    shoppingCollection.update({_id:ObjectId(id_product)},{$set:{name:name,price:price}},function(err,data){
-      if(err){
-        throw err
-      }else{
-        shoppingCollection.findOne({_id:ObjectId(id_product)},function(err,data){
-          if(err){
-            throw err;
-          }else{
-            socket.emit('updateProduct',data)
-          }
-        })
-      }
-    })
-  })
-  socket.on('deleteProduct', id_product=>{
-    shoppingCollection.remove({_id:ObjectId(id_product)},function(err,data){
-        if(err) {
-          throw err
-        }
-        else{
-          console.log(data)
-            socket.emit('deleteProduct',data);
-        }
-    })
-  })
-  socket.on('updateService',(id_service,name, price)=>{
-    serviceCollection.update({_id:ObjectId(id_service)},{name:name,price:price},function(err,data){
-      if(err){
+  socket.on("deleteBarber", id_barber => {
+    barberCollection.remove({ _id: ObjectId(id_barber) }, function(err, data) {
+      if (err) {
         throw err;
-      }else{
-        serviceCollection.findOne({_id:ObjectId(id_service)},function(err,data){
-          if(err){
-            throw err
-          }else{
-            console.log('Cập nhật dịch vụ', data)
-            socket.emit('updateService', data);
-          }
-        })
+      } else {
+        console.log("Xoa nhan vien ", data);
+        socket.emit("deleteBarber", data);
       }
-    })
-  })
-  socket.on('deleteService', id_service=>{
-    serviceCollection.remove({_id:ObjectId(id_service)},function(err,data){
-      if(err){
+    });
+  });
+  socket.on("addProduct", (selectedChip, name, price, url_image) => {
+    shoppingCollection.insert(
+      { type: selectedChip, name: name, image: url_image, price: price },
+      function(err, data) {
+        if (err) {
+          throw err;
+        } else {
+          console.log(data);
+          socket.emit("addProduct", data.ops[0]);
+        }
+      }
+    );
+  });
+  socket.on("updateProduct", (id_product, name, price) => {
+    shoppingCollection.update(
+      { _id: ObjectId(id_product) },
+      { $set: { name: name, price: price } },
+      function(err, data) {
+        if (err) {
+          throw err;
+        } else {
+          shoppingCollection.findOne({ _id: ObjectId(id_product) }, function(
+            err,
+            data
+          ) {
+            if (err) {
+              throw err;
+            } else {
+              socket.emit("updateProduct", data);
+            }
+          });
+        }
+      }
+    );
+  });
+  socket.on("deleteProduct", id_product => {
+    shoppingCollection.remove({ _id: ObjectId(id_product) }, function(
+      err,
+      data
+    ) {
+      if (err) {
         throw err;
-      }else{
-        socket.emit('deleteService', data)
+      } else {
+        console.log(data);
+        socket.emit("deleteProduct", data);
       }
-    })
-  })
-  socket.on('addService',(name, price)=>{
-    serviceCollection.insert({name:name, price:price},function(err,data){
-      if(err){
-        throw err
-      }else{
-        console.log('Thêm dịch vụ', data.ops[0])
-        socket.emit('addService', data.ops[0])
+    });
+  });
+  socket.on("updateService", (id_service, name, price) => {
+    serviceCollection.update(
+      { _id: ObjectId(id_service) },
+      { name: name, price: price },
+      function(err, data) {
+        if (err) {
+          throw err;
+        } else {
+          serviceCollection.findOne({ _id: ObjectId(id_service) }, function(
+            err,
+            data
+          ) {
+            if (err) {
+              throw err;
+            } else {
+              console.log("Cập nhật dịch vụ", data);
+              socket.emit("updateService", data);
+            }
+          });
+        }
       }
-    })
-  })
-  socket.on('getAssessment', id_barber=>{
-    console.log(id_barber)
-    ratingCollection.find({idBarber:id_barber}).forEach(function(data){
-      var date =ObjectId(data._id).getTimestamp()+0700
-      data.time = date.substring(16,24)
-      data.date = date.substring(4,15);
-      console.log(data)
-      socket.emit('getAssessment',data)
-      
-    })
-  })
+    );
+  });
+  socket.on("deleteService", id_service => {
+    serviceCollection.remove({ _id: ObjectId(id_service) }, function(
+      err,
+      data
+    ) {
+      if (err) {
+        throw err;
+      } else {
+        socket.emit("deleteService", data);
+      }
+    });
+  });
+  socket.on("addService", (name, price) => {
+    serviceCollection.insert({ name: name, price: price }, function(err, data) {
+      if (err) {
+        throw err;
+      } else {
+        console.log("Thêm dịch vụ", data.ops[0]);
+        socket.emit("addService", data.ops[0]);
+      }
+    });
+  });
+  socket.on("getAssessment", id_barber => {
+    console.log(id_barber);
+    ratingCollection.find({ idBarber: id_barber }).forEach(function(data) {
+      var date = ObjectId(data._id).getTimestamp() + 0700;
+      data.time = date.substring(16, 24);
+      data.date = date.substring(4, 15);
+      console.log(data);
+      socket.emit("getAssessment", data);
+    });
+  });
 });
