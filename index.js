@@ -318,6 +318,36 @@ io.on("connection", function(socket) {
       });
     }
   });
+  socket.on("getAllBookingInfo", phoneCustomer => {
+    booktimeCollection
+      .find({ $and: [{ done: false }, { customerPhone: phoneCustomer }] })
+      .sort({ _id: -1 })
+      .forEach(function(data) {
+        console.log(data);
+        socket.emit("getAllBookingInfo", data);
+      });
+  });
+  socket.on("deleteBookingInfo", (id,phoneCustomer) => {
+    booktimeCollection.remove({ _id: ObjectId(id) }, function(err, data) {
+      if (err) {
+        throw err;
+      } else {
+        console.log("Xoa InfoBooking ", data);
+        socket.emit("deleteBookingInfo", data);
+        let cursor = booktimeCollection
+            .find({ slot: false })
+            .sort({ _id: -1 })
+            .limit(1);
+          cursor.each(function(err, data) {
+            if (err) throw err;
+            else {
+              io.emit("getBookInfomation", data);
+              console.log("getBookInfomation" + data);
+            }
+          });
+      }
+    });
+  });
   socket.on("getBookingHistory", customerPhone => {
     booktimeCollection
       .find({ $and: [{ done: true }, { customerPhone: customerPhone }] })
